@@ -14,11 +14,11 @@ pub fn setup(app: &mut App) {
     app.add_plugin(RaycastingPlugin::<EditorPickingSet>::default())
         .insert_resource(EditorRayCastState::default())
         .add_system_set_to_stage(
-            CoreStage::PreUpdate,
+            CoreStage::First,
             SystemSet::new()
                 .with_system(update_raycast_with_cursor)
                 .with_system(auto_add_editor_picking_set)
-                .after(RaycastSystem::<EditorPickingSet>::BuildRays),
+                .before(RaycastSystem::BuildRays::<EditorPickingSet>),
         );
 }
 
@@ -43,7 +43,7 @@ fn auto_add_editor_picking_set(
         (Entity, &Handle<Mesh>),
         (
             Without<EditorRayCastMesh>,
-            // Without<DebugCursorMesh<EditorPickingSet>>,
+            Without<DebugCursorMesh<EditorPickingSet>>,
         ),
     >,
 ) {
