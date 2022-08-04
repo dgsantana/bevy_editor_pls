@@ -43,7 +43,7 @@ fn auto_add_editor_picking_set(
         (Entity, &Handle<Mesh>),
         (
             Without<EditorRayCastMesh>,
-            Without<DebugCursorMesh<EditorPickingSet>>,
+            // Without<DebugCursorMesh<EditorPickingSet>>,
         ),
     >,
 ) {

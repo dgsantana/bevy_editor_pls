@@ -233,7 +233,7 @@ fn spawn_editor_cameras(mut commands: Commands) {
     commands
         .spawn_bundle(Camera3dBundle {
             camera: Camera {
-                priority: 10,
+                priority: -10,
                 is_active: true,
                 ..Default::default()
             },
@@ -251,7 +251,7 @@ fn spawn_editor_cameras(mut commands: Commands) {
     commands
         .spawn_bundle(Camera3dBundle {
             camera: Camera {
-                priority: 11,
+                priority: -11,
                 is_active: false,
                 ..Default::default()
             },
@@ -270,7 +270,7 @@ fn spawn_editor_cameras(mut commands: Commands) {
         .spawn_bundle(map_ortho_cam_bundle(
             Camera2dBundle {
                 camera: Camera {
-                    priority: 12,
+                    priority: -12,
                     is_active: false,
                     ..Default::default()
                 },

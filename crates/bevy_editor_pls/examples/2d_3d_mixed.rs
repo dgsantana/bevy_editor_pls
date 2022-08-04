@@ -10,7 +10,14 @@ fn main() {
 }
 
 fn setup_2d(mut commands: Commands) {
-    commands.spawn_bundle(Camera2dBundle::default());
+    commands.spawn_bundle(Camera2dBundle {
+        camera: Camera {
+            priority: 1,
+            is_active: true,
+            ..Default::default()
+        },
+        ..Default::default()
+    });
     commands.spawn_bundle(SpriteBundle {
         sprite: Sprite {
             color: Color::rgb(0.25, 0.25, 0.75),
@@ -47,6 +54,11 @@ fn setup_3d(
         ..Default::default()
     });
     commands.spawn_bundle(Camera3dBundle {
+        camera: Camera {
+            priority: 0,
+            is_active: true,
+            ..Default::default()
+        },
         transform: Transform::from_xyz(-2.0, 2.5, 5.0).looking_at(Vec3::ZERO, Vec3::Y),
         ..Default::default()
     });
