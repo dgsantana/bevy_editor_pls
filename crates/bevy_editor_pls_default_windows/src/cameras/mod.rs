@@ -7,7 +7,6 @@ use std::marker::PhantomData;
 
 use bevy::{
     prelude::*,
-    render::camera::{ActiveCamera, Camera2d, Camera3d},
     render::primitives::Aabb,
 };
 use bevy_editor_pls_core::{
@@ -126,7 +125,7 @@ impl EditorWindow for CameraWindow {
                     .before(camera_3d_free::CameraSystem::Movement)
                     .before(camera_2d_panzoom::CameraSystem::Movement),
             )
-            .add_system_to_stage(CoreStage::PreUpdate, toggle_editor_cam)
+            // .add_system_to_stage(CoreStage::PreUpdate, toggle_editor_cam)
             .add_system_to_stage(CoreStage::PreUpdate, focus_selected)
             .add_system(initial_camera_setup)
             .add_startup_system_to_stage(StartupStage::PreStartup, spawn_editor_cameras);
@@ -177,46 +176,51 @@ fn set_active_editor_camera_marker(world: &mut World, editor_cam: EditorCamKind)
 fn cameras_ui(ui: &mut egui::Ui, world: &mut World) {
     // let cameras = active_cameras.all_sorted();
 
-    let cam_2d = world.resource::<ActiveCamera<Camera2d>>();
-    let cam_3d = world.resource::<ActiveCamera<Camera3d>>();
+    let mut cam_2d = world.query::<(&Camera2d, &Camera)>();
+    let cam_2d = cam_2d.iter(world).map(|(_, c)| c).find(|c| c.is_active);
+
+    let mut cam_3d = world.query::<(&Camera3d, &Camera)>();
+    let cam_3d = cam_3d.iter(world).map(|(_, c)| c).find(|c| c.is_active);
+    // let cam_2d = world.resource::<ActiveCamera<Camera2d>>();
+    // let cam_3d = world.resource::<ActiveCamera<Camera3d>>();
     let prev_cam_2d = world.resource::<PreviouslyActiveCamera<Camera2d>>();
     let prev_cam_3d = world.resource::<PreviouslyActiveCamera<Camera3d>>();
 
     ui.label("Cameras");
-    for (cam, curr_active, prev_active) in [
-        ("Camera2d", cam_2d.get(), prev_cam_2d.0),
-        ("Camera3d", cam_3d.get(), prev_cam_3d.0),
-    ] {
-        ui.horizontal(|ui| {
-            let active = curr_active.or(prev_active);
+    // for (cam, curr_active, prev_active) in [
+    //     ("Camera2d", cam_2d, prev_cam_2d.0),
+    //     ("Camera3d", cam_3d, prev_cam_3d.0),
+    // ] {
+    //     ui.horizontal(|ui| {
+    //         let active = curr_active.or(prev_active);
 
-            /*let text = egui::RichText::new("👁").heading();
-            let show_hide_button = egui::Button::new(text).frame(false);
-            if ui.add(show_hide_button).clicked() {
-                toggle_cam_visibility = Some((camera.to_string(), active));
-            }*/
+    //         /*let text = egui::RichText::new("👁").heading();
+    //         let show_hide_button = egui::Button::new(text).frame(false);
+    //         if ui.add(show_hide_button).clicked() {
+    //             toggle_cam_visibility = Some((camera.to_string(), active));
+    //         }*/
 
-            if active.is_none() {
-                ui.set_enabled(false);
-            }
+    //         if active.is_none() {
+    //             ui.set_enabled(false);
+    //         }
 
-            ui.label(format!("{}: {:?}", cam, active));
-        });
-    }
+    //         ui.label(format!("{}: {:?}", cam, active));
+    //     });
+    // }
 }
 
-fn map_ortho_cam_bundle<A: Component, B: Component>(
-    bundle: OrthographicCameraBundle<A>,
-    marker: B,
-) -> OrthographicCameraBundle<B> {
-    OrthographicCameraBundle {
+fn map_ortho_cam_bundle(
+    bundle: Camera2dBundle,
+) -> Camera2dBundle {
+    Camera2dBundle {
         camera: bundle.camera,
-        orthographic_projection: bundle.orthographic_projection,
         visible_entities: bundle.visible_entities,
         frustum: bundle.frustum,
         transform: bundle.transform,
         global_transform: bundle.global_transform,
-        marker,
+        camera_render_graph: bundle.camera_render_graph,
+        projection: bundle.projection,
+        camera_2d: bundle.camera_2d,
     }
 }
 
@@ -227,11 +231,16 @@ fn spawn_editor_cameras(mut commands: Commands) {
     struct Ec3d;
 
     commands
-        .spawn_bundle(PerspectiveCameraBundle::<Ec3d> {
-            camera: Camera::default(),
+        .spawn_bundle(Camera3dBundle {
+            camera: Camera {
+                priority: 10,
+                is_active: true,
+                ..Default::default()
+            },
             transform: Transform::from_xyz(0.0, 2.0, 5.0),
-            ..PerspectiveCameraBundle::new()
+            ..Default::default()
         })
+        .insert(Ec3d)
         .insert(camera_3d_free::FlycamControls::default())
         .insert(crate::hierarchy::picking::EditorRayCastSource::new())
         .insert(EditorCamera)
@@ -240,11 +249,16 @@ fn spawn_editor_cameras(mut commands: Commands) {
         .insert(Name::new("Editor Camera 3D Free"));
 
     commands
-        .spawn_bundle(PerspectiveCameraBundle::<Ec3d> {
-            camera: Camera::default(),
+        .spawn_bundle(Camera3dBundle {
+            camera: Camera {
+                priority: 11,
+                is_active: false,
+                ..Default::default()
+            },
             transform: Transform::from_xyz(0.0, 2.0, 5.0),
-            ..PerspectiveCameraBundle::new()
+            ..Default::default()
         })
+        .insert(Ec3d)
         .insert(camera_3d_panorbit::PanOrbitCamera::default())
         .insert(crate::hierarchy::picking::EditorRayCastSource::new())
         .insert(EditorCamera)
@@ -254,9 +268,16 @@ fn spawn_editor_cameras(mut commands: Commands) {
 
     commands
         .spawn_bundle(map_ortho_cam_bundle(
-            OrthographicCameraBundle::new_2d(),
-            Ec2d,
+            Camera2dBundle {
+                camera: Camera {
+                    priority: 12,
+                    is_active: false,
+                    ..Default::default()
+                },
+                ..Default::default()    
+            }
         ))
+        .insert(Ec2d)
         .insert(camera_2d_panzoom::PanCamControls::default())
         .insert(EditorCamera)
         .insert(EditorCamera2dPanZoom)
@@ -294,39 +315,39 @@ fn set_editor_cam_active(
 #[derive(Component, Default)]
 struct PreviouslyActiveCamera<T>(Option<Entity>, PhantomData<T>);
 
-fn toggle_editor_cam(
-    mut commands: Commands,
-    mut editor_events: EventReader<EditorEvent>,
-    mut active_cam_3d: ResMut<ActiveCamera<Camera3d>>,
-    mut active_cam_2d: ResMut<ActiveCamera<Camera2d>>,
-    mut prev_active_cam_3d: ResMut<PreviouslyActiveCamera<Camera3d>>,
-    mut prev_active_cam_2d: ResMut<PreviouslyActiveCamera<Camera2d>>,
-) {
-    for event in editor_events.iter() {
-        if let EditorEvent::Toggle { now_active } = *event {
-            if now_active {
-                prev_active_cam_3d.0 = active_cam_3d.get();
-                prev_active_cam_2d.0 = active_cam_2d.get();
+// fn toggle_editor_cam(
+//     mut commands: Commands,
+//     mut editor_events: EventReader<EditorEvent>,
+//     mut active_cam_3d: ResMut<ActiveCamera<Camera3d>>,
+//     mut active_cam_2d: ResMut<ActiveCamera<Camera2d>>,
+//     mut prev_active_cam_3d: ResMut<PreviouslyActiveCamera<Camera3d>>,
+//     mut prev_active_cam_2d: ResMut<PreviouslyActiveCamera<Camera2d>>,
+// ) {
+//     for event in editor_events.iter() {
+//         if let EditorEvent::Toggle { now_active } = *event {
+//             if now_active {
+//                 prev_active_cam_3d.0 = active_cam_3d.get();
+//                 prev_active_cam_2d.0 = active_cam_2d.get();
 
-                if let Some(cam) = prev_active_cam_3d.0 {
-                    commands.entity(cam).remove::<Camera3d>();
-                }
-                if let Some(cam) = prev_active_cam_2d.0 {
-                    commands.entity(cam).remove::<Camera2d>();
-                }
-            } else {
-                if let Some(prev_active) = prev_active_cam_3d.0 {
-                    active_cam_3d.set(prev_active);
-                    commands.entity(prev_active).insert(Camera3d);
-                }
-                if let Some(prev_active) = prev_active_cam_2d.0 {
-                    active_cam_2d.set(prev_active);
-                    commands.entity(prev_active).insert(Camera2d);
-                }
-            }
-        }
-    }
-}
+//                 if let Some(cam) = prev_active_cam_3d.0 {
+//                     commands.entity(cam).remove::<Camera3d>();
+//                 }
+//                 if let Some(cam) = prev_active_cam_2d.0 {
+//                     commands.entity(cam).remove::<Camera2d>();
+//                 }
+//             } else {
+//                 if let Some(prev_active) = prev_active_cam_3d.0 {
+//                     active_cam_3d.set(prev_active);
+//                     commands.entity(prev_active).insert(Camera3d::default());
+//                 }
+//                 if let Some(prev_active) = prev_active_cam_2d.0 {
+//                     active_cam_2d.set(prev_active);
+//                     commands.entity(prev_active).insert(Camera2d::default());
+//                 }
+//             }
+//         }
+//     }
+// }
 
 fn focus_selected(
     mut editor_events: EventReader<EditorEvent>,
@@ -364,7 +385,7 @@ fn focus_selected(
                 selected_query
                     .get(selected_e)
                     .map(|(&tf, bounds, sprite)| {
-                        let default_value = (tf.translation, tf.translation);
+                        let default_value = (tf.translation(), tf.translation());
                         let sprite_size = sprite
                             .map(|s| s.custom_size.unwrap_or(Vec2::ONE))
                             .map_or(default_value, |sprite_size| {

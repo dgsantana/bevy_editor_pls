@@ -1,8 +1,7 @@
 use bevy::{
-    core_pipeline::{self, AlphaMask3d, Opaque3d, Transparent2d, Transparent3d},
     prelude::*,
     render::{
-        camera::ExtractedCamera,
+        camera::{ExtractedCamera, CameraRenderGraph},
         render_asset::RenderAssets,
         render_graph::{self, RenderGraph, SlotValue},
         render_phase::RenderPhase,
@@ -13,7 +12,7 @@ use bevy::{
         texture::{BevyDefault, TextureCache},
         view::{ExtractedView, ExtractedWindows, ViewTarget, VisibleEntities, WindowSystem},
         RenderApp, RenderStage,
-    },
+    }, core_pipeline::{core_2d::Transparent2d, core_3d::{Opaque3d, AlphaMask3d, Transparent3d}},
 };
 use bevy_editor_pls_core::{Editor, EditorState};
 
@@ -38,27 +37,26 @@ pub fn setup(app: &mut App) {
     let cam3d_id = render_graph.add_node("cam3d_driver_node", cam3d_driver_node);
     let cam2d_id = render_graph.add_node("cam2d_driver_node", cam2d_driver_node);
 
-    render_graph
-        .add_node_edge(core_pipeline::node::CLEAR_PASS_DRIVER, cam3d_id)
-        .unwrap();
-    render_graph
-        .add_node_edge(cam3d_id, core_pipeline::node::MAIN_PASS_DRIVER)
-        .unwrap();
+    // render_graph
+    //     .add_node_edge(core_pipeline::node::CLEAR_PASS_DRIVER, cam3d_id)
+    //     .unwrap();
+    // render_graph
+    //     .add_node_edge(cam3d_id, MAIN_PASS_DRIVER)
+    //     .unwrap();
 
-    render_graph
-        .add_node_edge(core_pipeline::node::CLEAR_PASS_DRIVER, cam2d_id)
-        .unwrap();
-    render_graph
-        .add_node_edge(cam2d_id, core_pipeline::node::MAIN_PASS_DRIVER)
-        .unwrap();
+    // render_graph
+    //     .add_node_edge(core_pipeline::node::CLEAR_PASS_DRIVER, cam2d_id)
+    //     .unwrap();
+    // render_graph
+    //     .add_node_edge(cam2d_id, core_pipeline::node::MAIN_PASS_DRIVER)
+    //     .unwrap();
 }
 
+#[allow(clippy::too_many_arguments)]
 fn extract_editor_cameras(
-    editor: Res<Editor>,
-    editor_state: Res<EditorState>,
+    editor: Option<Res<Editor>>,
+    editor_state: Option<Res<EditorState>>,
     mut commands: Commands,
-    windows: Res<Windows>,
-    images: Res<Assets<Image>>,
     query_3d_free: Query<
         (Entity, &Camera, &GlobalTransform, &VisibleEntities),
         With<EditorCamera3dFree>,
@@ -72,9 +70,13 @@ fn extract_editor_cameras(
         With<EditorCamera2dPanZoom>,
     >,
 ) {
-    let camera_window_state = editor.window_state::<CameraWindow>().unwrap();
+    let camera_window_state = if let Some(editor) = editor.as_ref() {
+        editor.window_state::<CameraWindow>().unwrap()
+    } else {
+        return;
+    };
 
-    if !editor_state.active {
+    if !editor_state.map_or(false, |v| v.active) {
         return;
     }
 
@@ -84,7 +86,7 @@ fn extract_editor_cameras(
         EditorCamKind::D3PanOrbit => query_3d_panorbit.single(),
     };
 
-    let view_size = match camera.target.get_physical_size(&windows, &images) {
+    let view_size = match camera.physical_target_size() {
         Some(size) => size,
         _ => return,
     };
@@ -93,17 +95,17 @@ fn extract_editor_cameras(
     commands.insert_bundle((
         ExtractedCamera {
             target: camera.target.clone(),
-            physical_size: camera.target.get_physical_size(&windows, &images),
+            physical_target_size: camera.physical_target_size(),
+            physical_viewport_size: camera.physical_viewport_size(),
+            viewport: camera.viewport.clone(),
+            render_graph: Default::default(),
+            priority: camera.priority,
         },
         ExtractedView {
-            projection: camera.projection_matrix,
+            projection: camera.projection_matrix(),
             transform: *transform,
             width: view_size.x.max(1),
             height: view_size.y.max(1),
-            near: camera.near,
-            far: camera.far,
-            #[cfg(feature = "viewport")]
-            viewport: camera.viewport.clone(),
         },
         visible_entities.clone(),
     ));
@@ -133,7 +135,7 @@ fn prepare_editor_view_targets(
     cameras: Query<(Entity, &ExtractedCamera), Or<(With<ActiveCamera2d>, With<ActiveCamera3d>)>>,
 ) {
     for (entity, camera) in cameras.iter() {
-        let size = match camera.physical_size {
+        let size = match camera.physical_target_size {
             Some(size) => size,
             None => continue,
         };
@@ -195,7 +197,7 @@ impl render_graph::Node for Cam3DDriverNode {
     ) -> Result<(), render_graph::NodeRunError> {
         for entity in self.query.iter_manual(world) {
             graph.run_sub_graph(
-                core_pipeline::draw_3d_graph::NAME,
+                bevy::core_pipeline::core_3d::graph::NAME,
                 vec![SlotValue::Entity(entity)],
             )?;
         }
@@ -230,7 +232,7 @@ impl render_graph::Node for Cam2DDriverNode {
     ) -> Result<(), render_graph::NodeRunError> {
         for entity in self.query.iter_manual(world) {
             graph.run_sub_graph(
-                core_pipeline::draw_2d_graph::NAME,
+                bevy::core_pipeline::core_2d::graph::NAME,
                 vec![SlotValue::Entity(entity)],
             )?;
         }

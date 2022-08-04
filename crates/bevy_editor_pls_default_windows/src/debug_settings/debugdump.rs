@@ -20,7 +20,11 @@ pub fn setup(app: &mut App) {
     app.set_runner(move |mut app| {
         app.update();
 
-        let render_app = app.get_sub_app(RenderApp).expect("no render app");
+        let render_app = if let Ok(r) = app.get_sub_app(RenderApp) {
+            r
+        } else {
+            panic!("No render app.");
+        };
         let render_graph = render_app.world.get_resource::<RenderGraph>().unwrap();
 
         let schedule_style = schedule_graph::ScheduleGraphStyle {

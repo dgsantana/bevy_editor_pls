@@ -8,7 +8,7 @@ license = "MIT OR Apache-2.0"
 viewport = []
 
 [dependencies]
-bevy = { version = "0.8", default-features = false }
+bevy = { version = "0.8", default-features = false, features = ["bevy_scene"]}
 bevy_editor_pls_core = { path = "../bevy_editor_pls_core" }
 bevy-inspector-egui = "0.12"
 bevy_mod_raycast = "0.6"

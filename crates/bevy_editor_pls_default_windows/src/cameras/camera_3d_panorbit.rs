@@ -2,7 +2,7 @@
 
 use bevy::{
     input::mouse::{MouseMotion, MouseWheel},
-    prelude::*,
+    prelude::*, render::camera::Projection,
 };
 
 pub struct PanOrbitCameraPlugin;
@@ -53,10 +53,15 @@ fn pan_orbit_camera(
     mut ev_motion: EventReader<MouseMotion>,
     mut ev_scroll: EventReader<MouseWheel>,
     input_mouse: Res<Input<MouseButton>>,
-    mut query: Query<(&mut PanOrbitCamera, &mut Transform, &PerspectiveProjection)>,
+    mut query: Query<(&mut PanOrbitCamera, &mut Transform, &Projection)>,
 ) {
     // change input mapping for orbit and panning here
     let (mut pan_orbit, mut transform, projection) = query.single_mut();
+
+    let projection = match projection {
+        Projection::Perspective(proj) => proj,
+        _ => return
+    };
 
     if !pan_orbit.enabled {
         return;

@@ -1,10 +1,11 @@
 pub mod picking;
 
 use bevy::ecs::entity::Entities;
+use bevy::ecs::query::QuerySingleError;
 use bevy::pbr::wireframe::Wireframe;
+use bevy::prelude::*;
 use bevy::render::{RenderApp, RenderStage};
 use bevy::utils::HashSet;
-use bevy::{ecs::system::QuerySingleError, prelude::*};
 use bevy_editor_pls_core::EditorState;
 use bevy_inspector_egui::egui::{self, CollapsingHeader, RichText, ScrollArea};
 
@@ -133,13 +134,15 @@ fn handle_events(
     }
 }
 
-fn extract_wireframe_for_selected(editor: Res<Editor>, mut commands: Commands) {
-    let wireframe_for_selected = editor
-        .window_state::<DebugSettingsWindow>()
-        .map_or(false, |settings| settings.highlight_selected);
+fn extract_wireframe_for_selected(editor: Option<Res<Editor>>, mut commands: Commands) {
+    let wireframe_for_selected = editor.as_ref().map_or(false, |editor| {
+        editor
+            .window_state::<DebugSettingsWindow>()
+            .map_or(false, |settings| settings.highlight_selected)
+    });
 
     if wireframe_for_selected {
-        let selected = &editor.window_state::<HierarchyWindow>().unwrap().selected;
+        let selected = &editor.as_ref().unwrap().window_state::<HierarchyWindow>().unwrap().selected;
         for selected in selected.iter() {
             commands.get_or_spawn(selected).insert(Wireframe);
         }
@@ -260,7 +263,7 @@ impl<'a> Hierarchy<'a> {
             .iter()
             .flat_map(|selected| {
                 std::iter::successors(Some(selected), |&entity| {
-                    self.world.get::<Parent>(entity).map(|parent| parent.0)
+                    self.world.get::<Parent>(entity).map(|parent| parent.get())
                 })
                 .skip(1)
             })
@@ -273,6 +276,7 @@ impl<'a> Hierarchy<'a> {
             self.entity_ui(entity, ui, &always_open);
         }
     }
+
     fn entity_ui(&mut self, entity: Entity, ui: &mut egui::Ui, always_open: &HashSet<Entity>) {
         let selected = self.state.selected.contains(entity);
 
@@ -310,7 +314,7 @@ impl<'a> Hierarchy<'a> {
             .show(ui, |ui| {
                 let children = self.world.get::<Children>(entity);
                 if let Some(children) = children {
-                    let children = children.clone();
+                    let children: Vec<Entity> = { children.iter().cloned().collect() };
                     ui.label("Children");
                     for &child in children.iter() {
                         self.entity_ui(child, ui, always_open);
@@ -347,8 +351,8 @@ impl<'a> Hierarchy<'a> {
 
         if despawn {
             for entity in self.state.selected.iter() {
-                if let Some(&parent) = self.world.get::<Parent>(entity) {
-                    if let Some(mut children) = self.world.get_mut::<Children>(parent.0) {
+                if let Some(parent) = self.world.get::<Parent>(entity) {
+                    if let Some(mut children) = self.world.get_mut::<Children>(parent.get()) {
                         let new_children: Vec<_> = children
                             .iter()
                             .copied()
